@@ -1,0 +1,181 @@
+import React, { useState, useEffect } from "react";
+import { CreditCustomer } from "@/entities/CreditCustomer";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search, Filter, Plus } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { isPast, parseISO } from "date-fns";
+
+import CustomerCard from "../components/customers/CustomerCard";
+import AddCustomerDialog from "../components/customers/AddCustomerDialog";
+import ExtendDateDialog from "../components/customers/ExtendDateDialog";
+
+export default function Customers() {
+  const [customers, setCustomers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [extendingCustomer, setExtendingCustomer] = useState(null);
+
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  const loadCustomers = async () => {
+    const data = await CreditCustomer.list('-created_date');
+    setCustomers(data);
+  };
+
+  const handleAddCustomer = async (customerData) => {
+    await CreditCustomer.create(customerData);
+    loadCustomers();
+  };
+
+  const handleCall = (customer) => {
+    window.location.href = `tel:${customer.phone_number}`;
+    CreditCustomer.update(customer.id, {
+      ...customer,
+      status: 'contacted',
+      last_contacted: new Date().toISOString()
+    });
+    loadCustomers();
+  };
+
+  const handleMarkPaid = async (customer) => {
+    await CreditCustomer.update(customer.id, { ...customer, status: 'paid' });
+    loadCustomers();
+  };
+
+  const handleExtend = async (newDate, newTime) => {
+    if (extendingCustomer) {
+      await CreditCustomer.update(extendingCustomer.id, {
+        ...extendingCustomer,
+        due_date: newDate,
+        due_time: newTime,
+        status: 'extended'
+      });
+      loadCustomers();
+    }
+  };
+
+  const handleDelete = async (customer) => {
+    if (confirm(`Are you sure you want to delete ${customer.customer_name}?`)) {
+      await CreditCustomer.delete(customer.id);
+      loadCustomers();
+    }
+  };
+
+  const filteredCustomers = customers.filter(customer => {
+    const matchesSearch = customer.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         customer.phone_number.includes(searchQuery);
+    
+    const matchesStatus = statusFilter === 'all' || 
+                         (statusFilter === 'overdue' && isPast(parseISO(customer.due_date)) && customer.status !== 'paid') ||
+                         customer.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  return (
+    <div className="p-4 md:p-8 pb-24 lg:pb-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2">
+              All Customers
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400">
+              Search and filter your credit customers
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 mb-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Input
+                placeholder="Search by name or phone..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 dark:bg-gray-900 border-gray-200 dark:border-gray-700"
+              />
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-gray-400" />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40 dark:bg-gray-900 border-gray-200 dark:border-gray-700">
+                  <SelectValue placeholder="Filter status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="contacted">Contacted</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <AnimatePresence>
+            {filteredCustomers.map((customer) => (
+              <CustomerCard
+                key={customer.id}
+                customer={customer}
+                onCall={handleCall}
+                onMarkPaid={handleMarkPaid}
+                onExtend={(c) => setExtendingCustomer(c)}
+                onDelete={handleDelete}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {filteredCustomers.length === 0 && (
+          <div className="text-center py-16">
+            <div className="w-20 h-20 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+              <Search className="w-10 h-10 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              No customers found
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400">
+              Try adjusting your search or filters
+            </p>
+          </div>
+        )}
+
+        <Button
+          onClick={() => setShowAddDialog(true)}
+          className="fixed bottom-24 lg:bottom-8 right-4 lg:right-8 w-14 h-14 rounded-full shadow-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 z-40"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
+
+        <AddCustomerDialog
+          open={showAddDialog}
+          onClose={() => setShowAddDialog(false)}
+          onAdd={handleAddCustomer}
+        />
+
+        <ExtendDateDialog
+          customer={extendingCustomer}
+          open={!!extendingCustomer}
+          onClose={() => setExtendingCustomer(null)}
+          onExtend={handleExtend}
+        />
+      </div>
+    </div>
+  );
+}

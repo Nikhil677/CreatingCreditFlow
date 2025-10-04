@@ -1,0 +1,123 @@
+import React from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Phone, Check, Calendar, Trash2, Clock } from "lucide-react";
+import { format, parseISO, isPast, differenceInDays } from "date-fns";
+import { motion } from "framer-motion";
+
+export default function CustomerCard({ customer, onCall, onMarkPaid, onExtend, onDelete }) {
+  const dueDate = parseISO(customer.due_date);
+  const isOverdue = isPast(dueDate);
+  const daysUntilDue = differenceInDays(dueDate, new Date());
+  
+  const getUrgencyColor = () => {
+    if (customer.status === 'paid') return 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800';
+    if (isOverdue) return 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800';
+    if (daysUntilDue <= 2) return 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800';
+    return 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700';
+  };
+
+  const getStatusBadge = () => {
+    if (customer.status === 'paid') {
+      return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0">Paid</Badge>;
+    }
+    if (customer.status === 'contacted') {
+      return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-0">Contacted</Badge>;
+    }
+    if (isOverdue) {
+      return <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 border-0">Overdue</Badge>;
+    }
+    if (daysUntilDue <= 2) {
+      return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0">Due Soon</Badge>;
+    }
+    return <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-0">Active</Badge>;
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+    >
+      <Card className={`${getUrgencyColor()} border-2 transition-all duration-300 hover:shadow-xl`}>
+        <CardContent className="p-5">
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+                {customer.customer_name}
+              </h3>
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <Phone className="w-4 h-4" />
+                <span>{customer.phone_number}</span>
+              </div>
+            </div>
+            {getStatusBadge()}
+          </div>
+
+          <div className="bg-white/50 dark:bg-gray-900/30 rounded-xl p-4 mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Credit Amount</span>
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                ₹{customer.credit_amount?.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                <Calendar className="w-4 h-4" />
+                <span>Due: {format(dueDate, 'MMM d, yyyy')}</span>
+              </div>
+              {customer.due_time && (
+                <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                  <Clock className="w-4 h-4" />
+                  <span>{customer.due_time}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              onClick={() => onCall(customer)}
+              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md"
+            >
+              <Phone className="w-4 h-4 mr-2" />
+              Call
+            </Button>
+            <Button
+              onClick={() => onMarkPaid(customer)}
+              variant="outline"
+              className="border-2 dark:border-gray-600"
+              disabled={customer.status === 'paid'}
+            >
+              <Check className="w-4 h-4 mr-2" />
+              Paid
+            </Button>
+            <Button
+              onClick={() => onExtend(customer)}
+              variant="outline"
+              className="border-2 dark:border-gray-600"
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              Extend
+            </Button>
+            <Button
+              onClick={() => onDelete(customer)}
+              variant="outline"
+              className="border-2 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          </div>
+
+          {customer.notes && (
+            <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400">{customer.notes}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}

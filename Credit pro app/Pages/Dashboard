@@ -1,0 +1,214 @@
+import React, { useState, useEffect } from "react";
+import { CreditCustomer } from "@/entities/CreditCustomer";
+import { Button } from "@/components/ui/button";
+import { Plus, TrendingUp, Users, DollarSign, AlertCircle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AnimatePresence } from "framer-motion";
+import { isPast, parseISO, differenceInDays } from "date-fns";
+
+import CustomerCard from "../components/customers/CustomerCard";
+import AddCustomerDialog from "../components/customers/AddCustomerDialog";
+import ExtendDateDialog from "../components/customers/ExtendDateDialog";
+
+export default function Dashboard() {
+  const [customers, setCustomers] = useState([]);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [extendingCustomer, setExtendingCustomer] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  const loadCustomers = async () => {
+    setIsLoading(true);
+    const data = await CreditCustomer.list('-created_date');
+    setCustomers(data);
+    setIsLoading(false);
+  };
+
+  const handleAddCustomer = async (customerData) => {
+    await CreditCustomer.create(customerData);
+    loadCustomers();
+  };
+
+  const handleCall = (customer) => {
+    window.location.href = `tel:${customer.phone_number}`;
+    CreditCustomer.update(customer.id, {
+      ...customer,
+      status: 'contacted',
+      last_contacted: new Date().toISOString()
+    });
+    loadCustomers();
+  };
+
+  const handleMarkPaid = async (customer) => {
+    await CreditCustomer.update(customer.id, { ...customer, status: 'paid' });
+    loadCustomers();
+  };
+
+  const handleExtend = async (newDate, newTime) => {
+    if (extendingCustomer) {
+      await CreditCustomer.update(extendingCustomer.id, {
+        ...extendingCustomer,
+        due_date: newDate,
+        due_time: newTime,
+        status: 'extended'
+      });
+      loadCustomers();
+    }
+  };
+
+  const handleDelete = async (customer) => {
+    if (confirm(`Are you sure you want to delete ${customer.customer_name}?`)) {
+      await CreditCustomer.delete(customer.id);
+      loadCustomers();
+    }
+  };
+
+  const stats = {
+    total: customers.length,
+    active: customers.filter(c => c.status === 'active').length,
+    overdue: customers.filter(c => isPast(parseISO(c.due_date)) && c.status !== 'paid').length,
+    totalAmount: customers.filter(c => c.status !== 'paid').reduce((sum, c) => sum + (c.credit_amount || 0), 0)
+  };
+
+  const sortedCustomers = [...customers].sort((a, b) => {
+    if (a.status === 'paid' && b.status !== 'paid') return 1;
+    if (a.status !== 'paid' && b.status === 'paid') return -1;
+    
+    const aDate = parseISO(a.due_date);
+    const bDate = parseISO(b.due_date);
+    
+    const aOverdue = isPast(aDate);
+    const bOverdue = isPast(bDate);
+    
+    if (aOverdue && !bOverdue) return -1;
+    if (!aOverdue && bOverdue) return 1;
+    
+    return aDate - bDate;
+  });
+
+  return (
+    <div className="p-4 md:p-8 pb-24 lg:pb-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2">
+              Credit Dashboard
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400">
+              Manage and track all your credit customers
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 border-0 text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium opacity-90">Total Customers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end justify-between">
+                <p className="text-3xl font-bold">{stats.total}</p>
+                <Users className="w-8 h-8 opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-amber-500 to-amber-600 border-0 text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium opacity-90">Active Credits</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end justify-between">
+                <p className="text-3xl font-bold">{stats.active}</p>
+                <TrendingUp className="w-8 h-8 opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-rose-500 to-rose-600 border-0 text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium opacity-90">Overdue</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end justify-between">
+                <p className="text-3xl font-bold">{stats.overdue}</p>
+                <AlertCircle className="w-8 h-8 opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 border-0 text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium opacity-90">Total Outstanding</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end justify-between">
+                <p className="text-2xl font-bold">₹{stats.totalAmount.toLocaleString()}</p>
+                <DollarSign className="w-8 h-8 opacity-80" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <AnimatePresence>
+            {sortedCustomers.map((customer) => (
+              <CustomerCard
+                key={customer.id}
+                customer={customer}
+                onCall={handleCall}
+                onMarkPaid={handleMarkPaid}
+                onExtend={(c) => setExtendingCustomer(c)}
+                onDelete={handleDelete}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {customers.length === 0 && !isLoading && (
+          <div className="text-center py-16">
+            <div className="w-20 h-20 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+              <Users className="w-10 h-10 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              No customers yet
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 mb-6">
+              Start by adding your first credit customer
+            </p>
+            <Button
+              onClick={() => setShowAddDialog(true)}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Add Customer
+            </Button>
+          </div>
+        )}
+
+        <Button
+          onClick={() => setShowAddDialog(true)}
+          className="fixed bottom-24 lg:bottom-8 right-4 lg:right-8 w-14 h-14 rounded-full shadow-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 z-40"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
+
+        <AddCustomerDialog
+          open={showAddDialog}
+          onClose={() => setShowAddDialog(false)}
+          onAdd={handleAddCustomer}
+        />
+
+        <ExtendDateDialog
+          customer={extendingCustomer}
+          open={!!extendingCustomer}
+          onClose={() => setExtendingCustomer(null)}
+          onExtend={handleExtend}
+        />
+      </div>
+    </div>
+  );
+}

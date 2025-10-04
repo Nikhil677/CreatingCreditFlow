@@ -1,0 +1,81 @@
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Calendar } from "lucide-react";
+import { format, addDays } from "date-fns";
+
+export default function ExtendDateDialog({ customer, open, onClose, onExtend }) {
+  const [newDate, setNewDate] = useState(
+    customer ? format(addDays(new Date(customer.due_date), 7), 'yyyy-MM-dd') : ''
+  );
+  const [newTime, setNewTime] = useState(customer?.due_time || '10:00');
+
+  const handleExtend = () => {
+    onExtend(newDate, newTime);
+    onClose();
+  };
+
+  if (!customer) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            Extend Due Date
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Customer</Label>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <p className="font-medium text-gray-900 dark:text-white">{customer.customer_name}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">₹{customer.credit_amount?.toLocaleString()}</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="new-date">New Due Date</Label>
+            <Input
+              id="new-date"
+              type="date"
+              value={newDate}
+              onChange={(e) => setNewDate(e.target.value)}
+              className="dark:bg-gray-800"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="new-time">Reminder Time</Label>
+            <Input
+              id="new-time"
+              type="time"
+              value={newTime}
+              onChange={(e) => setNewTime(e.target.value)}
+              className="dark:bg-gray-800"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleExtend} className="bg-blue-600 hover:bg-blue-700">
+            Extend Date
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
